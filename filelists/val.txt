@@ -1,1 +1,0 @@
-/home/akool/shahid/wav2lip_288x288_old/dataset/lrs2_preprocessed/1
