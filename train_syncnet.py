@@ -62,7 +62,7 @@ print('use_cuda: {}'.format(use_cuda))
 num_audio_elements = 3200  # 6400  # 16000/25 * syncnet_T
 tot_num_frames = 25  # buffer
 v_context = 5  # 10  # 5
-BATCH_SIZE = 128  # 128
+BATCH_SIZE = 64  # 128
 MODE = 'train'
 TOP_DB = -hparams.min_level_db
 MIN_LEVEL = np.exp(TOP_DB / -20 * np.log(10))
@@ -74,6 +74,7 @@ logloss = nn.BCEWithLogitsLoss()
 class Dataset(object):
     def __init__(self, data_root, split):
         self.split = split
+        print(split)
         if split == 'pretrain':
             # self.all_videos = get_image_list(data_root,split)
             self.all_videos = get_image_list_new(split)
@@ -115,71 +116,76 @@ class Dataset(object):
 
     def __getitem__(self, idx):
         while 1:
-            idx = random.randint(0, len(self.all_videos) - 1)
-            vidname = self.all_videos[idx]
-            wavpath = join(vidname, "audio.wav")
-            img_names = natsorted(list(glob(join(vidname, '*.jpg'))), key=lambda y: y.lower())
-            interval_st, interval_end = 0, len(img_names)
-            if interval_end-interval_st <= tot_num_frames:
-                continue
-            pos_frame_id = random.randint(interval_st, interval_end-v_context)
-            pos_wav = self.get_wav(wavpath, pos_frame_id)
-            rms_pos_wav = self.rms(pos_wav)
-
-            img_name = os.path.join(vidname, str(pos_frame_id)+'.jpg')
-            window_fnames = self.get_window(img_name)
-            if window_fnames is None:
-                continue
-
-            window = []
-            all_read = True
-            for fname in window_fnames:
-                img = cv2.imread(fname)
-                if img is None:
-                    all_read = False
-                    break
-                try:
-                    img = cv2.resize(img, (hparams.img_size, hparams.img_size))
-                except Exception as e:
-                    all_read = False
-                    break
-
-                window.append(img)
-
-            if not all_read: continue
-            if random.choice([True, False]):
-                y = torch.ones(1).float()
-                wav = pos_wav
-            else:
-                y = torch.zeros(1).float()
-                try_counter = 0
-                while True:
-                    neg_frame_id = random.randint(interval_st, interval_end - v_context)
-                    if neg_frame_id != pos_frame_id:
-                        wav = self.get_wav(wavpath, neg_frame_id)
-                        if rms_pos_wav > 0.01:
-                            break
-                        else:
-                            if self.rms(wav) > 0.01 or try_counter>10:
-                                break
-                        try_counter += 1
-
-                if try_counter > 10:
+            try:
+                idx = random.randint(0, len(self.all_videos) - 1)
+                vidname = self.all_videos[idx]
+                # print(vidname)
+                wavpath = join(vidname, "audio.wav")
+                img_names = natsorted(list(glob(join(vidname, '*.jpg'))), key=lambda y: y.lower())
+                interval_st, interval_end = 0, len(img_names)
+                if interval_end-interval_st <= tot_num_frames:
                     continue
-            aud_tensor = torch.FloatTensor(wav)
+                pos_frame_id = random.randint(interval_st, interval_end-v_context)
+                pos_wav = self.get_wav(wavpath, pos_frame_id)
+                rms_pos_wav = self.rms(pos_wav)
 
-            # H, W, T, 3 --> T*3
-            vid = np.concatenate(window, axis=2) / 255.
-            vid = vid.transpose(2, 0, 1)
-            vid = torch.FloatTensor(vid[:, 48:])
-            if torch.any(torch.isnan(vid)) or torch.any(torch.isnan(aud_tensor)):
+                img_name = os.path.join(vidname, str(pos_frame_id)+'.jpg')
+                window_fnames = self.get_window(img_name)
+                if window_fnames is None:
+                    continue
+
+                window = []
+                all_read = True
+                for fname in window_fnames:
+                    img = cv2.imread(fname)
+                    if img is None:
+                        all_read = False
+                        break
+                    try:
+                        img = cv2.resize(img, (hparams.img_size, hparams.img_size))
+                    except Exception as e:
+                        all_read = False
+                        break
+
+                    window.append(img)
+
+                if not all_read: continue
+                if random.choice([True, False]):
+                    y = torch.ones(1).float()
+                    wav = pos_wav
+                else:
+                    y = torch.zeros(1).float()
+                    try_counter = 0
+                    while True:
+                        neg_frame_id = random.randint(interval_st, interval_end - v_context)
+                        if neg_frame_id != pos_frame_id:
+                            wav = self.get_wav(wavpath, neg_frame_id)
+                            if rms_pos_wav > 0.01:
+                                break
+                            else:
+                                if self.rms(wav) > 0.01 or try_counter>10:
+                                    break
+                            try_counter += 1
+
+                    if try_counter > 10:
+                        continue
+                aud_tensor = torch.FloatTensor(wav)
+
+                # H, W, T, 3 --> T*3
+                vid = np.concatenate(window, axis=2) / 255.
+                vid = vid.transpose(2, 0, 1)
+                vid = torch.FloatTensor(vid[:, 48:])
+                if torch.any(torch.isnan(vid)) or torch.any(torch.isnan(aud_tensor)):
+                    continue
+                if vid==None or aud_tensor==None:
+                    continue
+                # print("vid shape:", vid.shape)
+                # print("aud_tensor shape:", aud_tensor.shape)
+                # print(" ")
+                # print("y shape:", y.shape)
+            except RuntimeError as e:
+                print(f"Caught an error in __getitem__ at index {idx}: {e}. Trying the next index.")
                 continue
-            if vid==None or aud_tensor==None:
-                continue
-            # print("vid shape:", vid.shape)
-            # print("aud_tensor shape:", aud_tensor.shape)
-            print(" ")
-            # print("y shape:", y.shape)
             return vid, aud_tensor, y
 
 

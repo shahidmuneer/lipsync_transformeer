@@ -13,6 +13,7 @@ def get_image_list_new(split):  # root=/data2/cxh/liwen/work/Wav2Lip/lrs2_prepro
 				line = line.split()[0]
 			# print(line)
 			path = os.path.splitext(line)[0]
+			# print(path)
 			filelist.append(path)
 			# print(filelist)
 	return filelist
@@ -109,7 +110,7 @@ hparams = HParams(
 	batch_size=16,
 	initial_learning_rate=1e-4,
 	nepochs=200000000000000000,  ### ctrl + c, stop whenever eval loss is consistently greater than train loss for ~10 epochs
-	num_workers=16,
+	num_workers=4,
 	checkpoint_interval=3000,
 	eval_interval=3000,
     save_optimizer_state=True,
