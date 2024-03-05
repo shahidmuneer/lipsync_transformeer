@@ -124,6 +124,9 @@ class Dataset(object):
                 img_names = natsorted(list(glob(join(vidname, '*.jpg'))), key=lambda y: y.lower())
                 interval_st, interval_end = 0, len(img_names)
                 if interval_end-interval_st <= tot_num_frames:
+                    # print("total num frames issue")
+                    idx += 1
+                    # print(idx)
                     continue
                 pos_frame_id = random.randint(interval_st, interval_end-v_context)
                 pos_wav = self.get_wav(wavpath, pos_frame_id)
@@ -132,6 +135,8 @@ class Dataset(object):
                 img_name = os.path.join(vidname, str(pos_frame_id)+'.jpg')
                 window_fnames = self.get_window(img_name)
                 if window_fnames is None:
+                    idx += 1
+                    # print(f"Windows frames issue")
                     continue
 
                 window = []
@@ -168,6 +173,7 @@ class Dataset(object):
                             try_counter += 1
 
                     if try_counter > 10:
+                        idx += 1
                         continue
                 aud_tensor = torch.FloatTensor(wav)
 
@@ -176,11 +182,19 @@ class Dataset(object):
                 vid = vid.transpose(2, 0, 1)
                 vid = torch.FloatTensor(vid[:, 48:])
                 if torch.any(torch.isnan(vid)) or torch.any(torch.isnan(aud_tensor)):
+                    # print("Nan issue vid")
+                    idx += 1
                     continue
                 if vid==None or aud_tensor==None:
+                    # print("Vid or aud tensor issue")
+                    idx += 1
                     continue
-                # print("vid shape:", vid.shape)
+                # # print("vid shape:", vid.shape)
                 # print("aud_tensor shape:", aud_tensor.shape)
+                if(aud_tensor.dim()>1):
+                    aud_tensor = aud_tensor[:, 0]
+                    
+                    # print(f"wrong dimension at {idx} {aud_tensor.shape} {vidname}")
                 # print(" ")
                 # print("y shape:", y.shape)
             except RuntimeError as e:
@@ -366,5 +380,5 @@ if __name__ == "__main__":
 
     train(device, model, train_data_loader, test_data_loader, optimizer,
           checkpoint_dir=checkpoint_dir,
-          checkpoint_interval=100,
+          checkpoint_interval=3000,
           nepochs=1000)
